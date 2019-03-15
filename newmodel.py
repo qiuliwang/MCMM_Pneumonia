@@ -16,7 +16,6 @@ class RCNNMODEL(BaseModel):
 
     def build_cnn(self):
         """ Build the CNN. """
-        print("Building the CNN...")
         if self.config.cnn == 'mycnn':
             self.build_mycnn()
         elif self.config.cnn == 'vgg16':
@@ -34,20 +33,24 @@ class RCNNMODEL(BaseModel):
         conv1_1_feats = self.nn.conv2d(images, 64, name = 'conv1_1')
         conv1_2_feats = self.nn.conv2d(conv1_1_feats, 64, name = 'conv1_2')
         pool1_feats = self.nn.max_pool2d(conv1_2_feats, name = 'pool1')
+        print('shape of pool1_feats: ', pool1_feats.get_shape().as_list())
 
         conv2_1_feats = self.nn.conv2d(pool1_feats, 128, name = 'conv2_1')
         conv2_2_feats = self.nn.conv2d(conv2_1_feats, 128, name = 'conv2_2')
         pool2_feats = self.nn.max_pool2d(conv2_2_feats, name = 'pool2')
+        print('shape of pool2_feats: ', pool2_feats.get_shape().as_list())
 
         conv3_1_feats = self.nn.conv2d(pool2_feats, 256, name = 'conv3_1')
         conv3_2_feats = self.nn.conv2d(conv3_1_feats, 256, name = 'conv3_2')
         conv3_3_feats = self.nn.conv2d(conv3_2_feats, 256, name = 'conv3_3')
         pool3_feats = self.nn.max_pool2d(conv3_3_feats, name = 'pool3')
+        print('shape of pool3_feats: ', pool3_feats.get_shape().as_list())
 
         conv4_1_feats = self.nn.conv2d(pool3_feats, 512, name = 'conv4_1')
         conv4_2_feats = self.nn.conv2d(conv4_1_feats, 512, name = 'conv4_2')
         conv4_3_feats = self.nn.conv2d(conv4_2_feats, 512, name = 'conv4_3')
         pool4_feats = self.nn.max_pool2d(conv4_3_feats, name = 'pool4')
+        print('shape of pool4_feats: ', pool4_feats.get_shape().as_list())
 
         conv5_1_feats = self.nn.conv2d(pool4_feats, 512, name = 'conv5_1')
         conv5_2_feats = self.nn.conv2d(conv5_1_feats, 512, name = 'conv5_2')
