@@ -1,0 +1,7 @@
+*.pyc
+.ignore
+*.csv
+*.txt
+*.npy
+summary/
+models/
