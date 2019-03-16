@@ -347,6 +347,7 @@ class RCNNMODEL(BaseModel):
             cross_entropies.append(cross_entropy)
             probs = tf.nn.softmax(logits)
             prediction = tf.argmax(probs, 1)
+
             self.correct_pred = tf.equal(prediction, tf.argmax(real_label, 1))
             print('correct_pred: ',type(self.correct_pred))
             last_state = state

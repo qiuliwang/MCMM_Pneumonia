@@ -71,9 +71,9 @@ class BaseModel(object):
         record = open('lossrecord.txt', 'w')
         for _ in tqdm(list(range(config.num_epochs)), desc='epoch'):
 
-            for onepatient in tqdm(train_data[31:], desc = 'data'):
-                onelabel = self.getLabel(onepatient, train_data_label)
-                slices = dataobj.getOnePatient(onepatient, transign)
+            for onepatient in tqdm(train_data_label, desc = 'data'):
+                onelabel = self.getLabel(onepatient[0], train_data_label)
+                slices = dataobj.getOnePatient(onepatient[0], transign)
                 # print('shape: ', slices.shape)
                 feed_dict = {self.images: slices, self.real_label: onelabel}            
 
@@ -82,15 +82,15 @@ class BaseModel(object):
                                                     self.global_step,],
                                                     feed_dict=feed_dict)
 
-                if (global_step + 1) % config.save_period == 0:
-                    self.save()
+                # if (global_step + 1) % config.save_period == 0:
+                #     self.save()
                 if (global_step + 1) % 1000 == 0:
                     print('@@@@@@@@@@@@@@@@@@@@@@@@@')
                     temploss = 0.0
                     correctpercent = 0.0
-                    for testpatient in train_data[:31]:
-                        testlabel = self.getLabel(testpatient, train_data_label)
-                        testslices = dataobj.getOnePatient(testpatient, False)
+                    for testpatient in train_data_label[:30]:
+                        testlabel = self.getLabel(testpatient[0], train_data_label)
+                        testslices = dataobj.getOnePatient(testpatient[0], False)
                         feed_dict = {self.images: testslices, self.real_label: testlabel}
                         loss, correctpred = sess.run([self.cross_entropy_loss, self.correct_pred], feed_dict=feed_dict)
                         temploss += loss
@@ -102,7 +102,7 @@ class BaseModel(object):
                     record.write('loss: ' + str(temploss / 30) + '\n')
             train_writer.add_summary(summary, global_step)
 
-        self.save()
+        self.save('resnetweight')
         record.close()
         train_writer.close()
         print("Training complete.")
@@ -130,37 +130,42 @@ class BaseModel(object):
             
         return label
 
-    def test(self, sess, testdatapath, dataobj):
+    def test(self, sess, testlabel, dataobj):
         """ Test the model using any given images. """
         print("Testing the model ...")
         config = self.config
-
-        testpatients = os.listdir(testdatapath)
-        predrecord = open('predrecord.csv', 'w')
+        predrecord = open('predrecord_'+ self.config.cnn + '_'+ str(self.config.num_lstm_units) + '_'+'_.csv', 'w')
         
         predrecord.write('id,ret\n')
-
-        for onetestpatient in tqdm(testpatients):
-            onelabel = [[0, 0]]
-            slices = dataobj.getOnePatient2(testdatapath, onetestpatient)
+        correctpercent = 0
+        for onetestpatient in tqdm(testlabel):
+            onelabel = self.getLabel(onetestpatient[0], testlabel)
+            print(onelabel)
+            onepatientname = onetestpatient[0]
+            slices = dataobj.getOnePatient(onepatientname)
             # print('shape: ', slices.shape)
             
             feed_dict = {self.images: slices, self.real_label: onelabel}
-            prediction = sess.run([self.prediction], feed_dict=feed_dict)
+            prediction, correct_pred = sess.run([self.prediction, self.correct_pred], feed_dict=feed_dict)
+            if correct_pred == True:
+                correctpercent += 1
             # print(type(prediction))
             # print(prediction[0])
-            predrecord.write(onetestpatient + ',' + str(prediction[0][0]) + '\n')
-            
+            # print(type(prediction))
+            # print(prediction)
+            # print(prediction[0])
+        
+        print('accuracy: ', float(correctpercent) / len(testlabel)) 
         predrecord.close()
         print("Test completed.")
 
-    def save(self):
+    def save(self, sign):
         """ Save the model. """
         config = self.config
         data = {v.name: v.eval() for v in tf.global_variables()}
         save_path = os.path.join(config.save_dir, str(self.global_step.eval()))
 
-        print((" Saving the model to %s..." % (save_path+".npy")))
+        print((" Saving the model to %s..." % (save_path+sign +".npy")))
         np.save(save_path, data)
         info_file = open(os.path.join(config.save_dir, "config.pickle"), "wb")
         config_ = copy.copy(config)

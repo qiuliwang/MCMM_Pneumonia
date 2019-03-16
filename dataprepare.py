@@ -70,7 +70,7 @@ class Data(object):
         self.slicethicknesscount = []
 	self.count = 0
 
-    def getOnePatient(self, patientName, transsign = True):
+    def getOnePatient(self, patientName, transsign = False):
         dcmfiles = os.listdir(self.datapath + patientName)
         # print(dcmfiles)
         dcmfiles.sort()
@@ -128,7 +128,7 @@ class Data(object):
             temp = truncate_hu(temp)
             # scipy.misc.imsave('./res/' + str(sign) + '.jpeg', temp)
             # np.save('./res/' + str(sign) + '.npy', temp)
-            temp = cv2.resize(temp, (256, 256))
+            # temp = cv2.resize(temp, (256, 256))
             sign += 1
             pixels.append(temp)
 
