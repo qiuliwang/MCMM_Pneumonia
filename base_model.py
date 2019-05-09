@@ -6,49 +6,19 @@ import pickle
 import copy
 import json
 from tqdm import tqdm
+import scipy.misc
 
 from utils.nn import NN
 
 from utils.misc import ImageLoader, CaptionData, TopN
-
-test_data = ['0013EDC2-8D7A-4A41-AEB5-D3BB592306D2',
-'0030CBD1-2472-42C4-8CE4-E01A4E8E2F09',
-'0036DF08-EEEC-467C-8CF1-5A54E0B13CE8',
-'003D2553-266F-47E3-A420-F5B8F95217A7',
-'0072E2C1-C395-409B-8078-365DD5C0513E',
-'00C1E256-E3F7-431D-BCB6-DD1EF09E7DFE',
-'00C79BB9-C2BC-4BF2-A8E6-5C3866DCBF3D',
-'00CAD9C8-D90B-43C4-9964-79CAE6493DA7',
-'00D5ADEF-A62D-4DF3-A9C0-31000C826023',
-'00D6C763-CCE3-4D48-A165-324A36285DAB',
-'00E8B6E7-9E4C-4FA9-B9C2-A9466667ACAC',
-'00F9FF74-1D6D-4BF9-BB02-5C33DDADBE13',
-'00FD9E8C-F811-477E-B42A-B6B44100CD5C',
-'0113A22C-CDC6-48F9-ADC2-F2D38EA5FC90',
-'0116B20D-36FA-4364-93C2-79DCCA2AB177',
-'01347C43-CBFB-4EBB-99A3-CEA6332E7535',
-'0152C839-EB23-41A3-9AA6-8847E54C937C',
-'01665898-4C2C-4201-B889-D303ACC8D045',
-'016FC8F3-D808-4AFC-85F2-3DF314B65B78',
-'01922428-C7A9-45D1-922A-164C1394C970',
-'019C6DF4-30C1-4EBB-9904-713BBDA77F0D',
-'01A0F362-15F9-4344-9AB9-B961A0FC4336',
-'01C2E827-0665-4C99-976D-757E5B9D0F3C',
-'01D03196-A1C9-4EA8-A729-8896EF4DB348',
-'01F14201-7DC3-4F27-9F93-950E17B700B9',
-'02038AEF-061B-43B1-A6CE-F236F9BB54EA',
-'02400A3A-B9CC-42DA-92FF-98D3780A61F6',
-'0245345F-733A-4BE8-887B-BBE122DBECCC',
-'02459974-2670-4928-9FBD-99C658E85F19',
-'02647665-2213-4E4F-AA33-2E4B91BA270A']
-
+from sklearn.metrics import roc_auc_score,recall_score
 class BaseModel(object):
     def __init__(self, config):
         self.config = config
         self.is_train = True if config.phase == 'train' else False
         self.train_cnn = self.is_train and config.train_cnn
         self.image_loader = ImageLoader('./utils/ilsvrc_2012_mean.npy')
-        self.image_shape = [512, 512, 1]
+        self.image_shape = [512, 512, 3]
         self.nn = NN(config)
         self.global_step = tf.Variable(0,
                                        name = 'global_step',
@@ -58,7 +28,7 @@ class BaseModel(object):
     def build(self):
         raise NotImplementedError()
 
-    def train(self, sess, train_data, train_data_label, dataobj, transign):
+    def train(self, sess, train_data, test_data, dataobj, transign):
         """ Train the model. """
         print("Training the model...")
         config = self.config
@@ -71,38 +41,46 @@ class BaseModel(object):
         record = open('lossrecord.txt', 'w')
         for _ in tqdm(list(range(config.num_epochs)), desc='epoch'):
 
-            for onepatient in tqdm(train_data_label, desc = 'data'):
-                onelabel = self.getLabel(onepatient[0], train_data_label)
-                slices = dataobj.getOnePatient(onepatient[0], transign)
-                # print('shape: ', slices.shape)
+            for onepatient in tqdm(train_data, desc = 'data'):
+
+                slices = dataobj.getOnePatient(onepatient, transign)
+                if 'nor' in onepatient[1]:
+                    onelabel = [[0, 1]]
+                else:
+                    onelabel = [[1, 0]]
+                # print(onelabel)
+                # print('onelabel: ', onelabel)
                 feed_dict = {self.images: slices, self.real_label: onelabel}            
 
                 _, summary, global_step = sess.run([self.opt_op,
                                                     self.summary,
-                                                    self.global_step,],
+                                                    self.global_step],
                                                     feed_dict=feed_dict)
 
-                # if (global_step + 1) % config.save_period == 0:
-                #     self.save()
-                if (global_step + 1) % 1000 == 0:
-                    print('@@@@@@@@@@@@@@@@@@@@@@@@@')
-                    temploss = 0.0
-                    correctpercent = 0.0
-                    for testpatient in train_data_label[:30]:
-                        testlabel = self.getLabel(testpatient[0], train_data_label)
-                        testslices = dataobj.getOnePatient(testpatient[0], False)
-                        feed_dict = {self.images: testslices, self.real_label: testlabel}
-                        loss, correctpred = sess.run([self.cross_entropy_loss, self.correct_pred], feed_dict=feed_dict)
-                        temploss += loss
-                        if correctpred == True:
-                            correctpercent += 1
-                    print('loss: ', temploss / 30)
-                    print('correction: ', correctpercent / 30)
-                
-                    record.write('loss: ' + str(temploss / 30) + '\n')
+            print('@@@@@@@@@@@@@@@@@@@@@@@@@')
+            temploss = 0.0
+            correctpercent = 0.0
+            for testpatient in test_data:
+                if 'nor' in testpatient[1]:
+                    onelabel = [[0, 1]]
+                else:
+                    onelabel = [[1, 0]]  
+                # print(testlabel)                    
+                testslices = dataobj.getOnePatient(testpatient, False)
+
+                feed_dict = {self.images: testslices, self.real_label: onelabel}
+                loss, correctpred = sess.run([self.loss, self.correct_pred], feed_dict=feed_dict)
+                temploss += loss
+                if correctpred == True:
+                    correctpercent += 1
+                else:
+                    print(testpatient)
+            print('loss: ', temploss / len(test_data))
+            print('acc: ', correctpercent / len(test_data))
+            record.write('loss: ' + str(temploss / len(test_data)) + '\n')
             train_writer.add_summary(summary, global_step)
 
-        self.save('resnetweight')
+        self.save()
         record.close()
         train_writer.close()
         print("Training complete.")
@@ -130,42 +108,63 @@ class BaseModel(object):
             
         return label
 
-    def test(self, sess, testlabel, dataobj):
+    def test(self, sess, testdata, dataobj):
         """ Test the model using any given images. """
         print("Testing the model ...")
         config = self.config
         predrecord = open('predrecord_'+ self.config.cnn + '_'+ str(self.config.num_lstm_units) + '_'+'_.csv', 'w')
-        
         predrecord.write('id,ret\n')
         correctpercent = 0
-        for onetestpatient in tqdm(testlabel):
-            onelabel = self.getLabel(onetestpatient[0], testlabel)
-            print(onelabel)
-            onepatientname = onetestpatient[0]
-            slices = dataobj.getOnePatient(onepatientname)
-            # print('shape: ', slices.shape)
-            
+        TP=0
+        TN=0
+        FP=0
+        FN=0
+        label=[]
+        pre=[]
+        for onetestpatient in tqdm(testdata):
+            if 'nor' in onetestpatient[1]:
+                onelabel = [[0, 1]]
+            else:
+                onelabel = [[1, 0]]
+            label.append(np.argmin(onelabel))
+
+            slices = dataobj.getOnePatient(onetestpatient)            
             feed_dict = {self.images: slices, self.real_label: onelabel}
             prediction, correct_pred = sess.run([self.prediction, self.correct_pred], feed_dict=feed_dict)
-            if correct_pred == True:
+            pre.append(1-prediction)
+            print(correct_pred)
+            if correct_pred == True: 
                 correctpercent += 1
-            # print(type(prediction))
-            # print(prediction[0])
-            # print(type(prediction))
-            # print(prediction)
-            # print(prediction[0])
+                if 'nor' in onetestpatient[1]:
+                    TN+=1
+                else:
+                    TP+=1
+            else:
+                if 'nor'  in onetestpatient[1]:
+                    FP+=1
+                else:
+                    FN+=1
+                predrecord.write(onetestpatient[0]+','+onetestpatient[1]+'\n')
+                print(onetestpatient)
+        print(correctpercent)
+        print(len(testdata))
+        print('Sensitivity',float(TP)/float(TP+FN))
+        print('Specificity',float(TN)/float(FP+TN))
+        print('recall_score',recall_score(label,pre))
+        print('AUC',roc_auc_score(label,pre))
         
-        print('accuracy: ', float(correctpercent) / len(testlabel)) 
+        print('accuracy: ', float(correctpercent) / len(testdata)) 
         predrecord.close()
+
         print("Test completed.")
 
-    def save(self, sign):
+    def save(self):
         """ Save the model. """
         config = self.config
         data = {v.name: v.eval() for v in tf.global_variables()}
         save_path = os.path.join(config.save_dir, str(self.global_step.eval()))
 
-        print((" Saving the model to %s..." % (save_path+sign +".npy")))
+        print((" Saving the model to %s..." % (save_path +".npy")))
         np.save(save_path, data)
         info_file = open(os.path.join(config.save_dir, "config.pickle"), "wb")
         config_ = copy.copy(config)
@@ -196,6 +195,8 @@ class BaseModel(object):
                 sess.run(v.assign(data_dict[v.name]))
                 count += 1
         print("%d tensors loaded." %count)
+    
+    # def load_tf(self, sess, )
 
     def load_cnn(self, session, data_path, ignore_missing=True):
         """ Load a pretrained CNN model. """

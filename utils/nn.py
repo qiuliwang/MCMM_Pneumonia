@@ -68,7 +68,45 @@ class NN(object):
             kernel_regularizer = self.conv_kernel_regularizer,
             activity_regularizer = activity_regularizer,
             name = name)
+    def deconv2d(self,
+               inputs,
+               filters,
+               kernel_size = (2,2),
+               strides = (2,2),
+               activation = tf.nn.relu,
+               use_bias = True,
+               name = None):
+        """ 2D Convolution layer. """
+        if activation is not None:
+            activity_regularizer = self.conv_activity_regularizer
+        else:
+            activity_regularizer = None
+        return tf.layers.conv2d_transpose(
+            inputs = inputs,
+            filters = filters,
+            kernel_size = kernel_size,
+            strides = strides,
+            padding='same',
+            activation = activation,
+            use_bias = use_bias,
+            trainable = self.train_cnn,
+            kernel_initializer = self.conv_kernel_initializer,
+            #kernel_regularizer = self.conv_kernel_regularizer,
+            #activity_regularizer = activity_regularizer,
+            name = name)
 
+    def concat(self,
+               concatlist,
+               axis=3):
+        return tf.concat(concatlist,axis=axis)
+        
+    def upsample2d(self,
+                   inputs,
+                   outputsize):
+        return tf.image.resize_images(inputs,outputsize,method=0)
+                   
+    
+                
     def max_pool2d(self,
                    inputs,
                    pool_size = (2, 2),
@@ -110,7 +148,7 @@ class NN(object):
         """ Dropout layer. """
         return tf.layers.dropout(
             inputs = inputs,
-            rate = self.config.fc_drop_rate,
+            rate = self.config.unet_drop_rate,
             training = self.is_train)
 
     def batch_norm(self,
@@ -123,3 +161,4 @@ class NN(object):
             trainable = self.train_cnn,
             name = name
         )
+        

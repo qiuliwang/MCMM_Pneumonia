@@ -10,13 +10,22 @@ cmpfun = operator.attrgetter('InstanceNumber')
 from PIL import Image
 from random import choice
 import cv2
+import rotate
 
 # LUNA2016 data prepare ,first step: truncate HU to -1000 to 400
-def truncate_hu(image_array):
-    image_array[image_array > 300] = 0
-    image_array[image_array < 10] = 0
-    return image_array
-    
+def truncate_hu(image_array, max, min):
+    image = image_array.copy()
+    image[image > max] = max
+    image[image < min] = min
+    image = normalazation(image)
+    return image
+def getThreeChannel(pixhu):
+    lungwindow = truncate_hu(pixhu, 400, -1000)
+    highattenuation = truncate_hu(pixhu, 240, -160)
+    lowattenuation = truncate_hu(pixhu, -950, -1400)
+    pngfile = [lowattenuation, lungwindow, highattenuation]
+    pngfile = np.array(pngfile).transpose(1,2,0)
+    return  pngfile    
 # LUNA2016 data prepare ,second step: normalzation the HU
 def normalazation(image_array):
     max = image_array.max()
@@ -28,19 +37,19 @@ def normalazation(image_array):
 
 def get_pixels_hu(ds):
     image = ds.pixel_array
-    # Convert to int16 (from sometimes int16),
-    # should be possible as values should always be low enough (<32k)
-    # Set outside-of-scan pixels to 0
-    # The intercept is usually -1024, so air is approximately 0
-    # Convert to Hounsfield units (HU)
+    image = np.array(image , dtype = np.float32)
     intercept = ds.RescaleIntercept
     slope = ds.RescaleSlope
-    # print(intercept)
-    # print(slope)
     image = image * slope
     image += intercept
     return image
-
+    
+def gray2rgb(im):
+    im=im[:,:,np.newaxis]
+    im0=im1=im
+    
+    im=np.concatenate((im0,im1,im),axis=2)
+    return im
 
 def angle_transpose(file,degree):
     '''
@@ -60,161 +69,88 @@ def angle_transpose(file,degree):
     return newarr
 
 class Data(object):
-    def __init__(self, datapath, labelpath = ''):
-        self.datapath = datapath
-        self.labelpath  = labelpath
-        self.patients = os.listdir(datapath)
-        lines = csvTools.readCSV(self.labelpath)
-        lines = lines[1:]
-        self.labels = lines
-        self.slicethicknesscount = []
-	self.count = 0
+    def __init__(self):
+	    self.count = 0
 
     def getOnePatient(self, patientName, transsign = False):
-        dcmfiles = os.listdir(self.datapath + patientName)
-        # print(dcmfiles)
+        # print(patientName)
+        if 'fung' in patientName[1]:
+            datapath = '/raid/data/pneumonia/FungusScreened/'
+        elif 'bact' in patientName[1]:
+            datapath = '/raid/data/pneumonia/BacteriaScreened/'
+            
+            
+        else:
+        
+            datapath = '/raid/data/pneumonia/NormalScreened/'
+        # print(datapath)
+        dcmfiles = os.listdir(datapath + patientName[0])
         dcmfiles.sort()
-        # print(dcmfiles)
-        slices = [pydicom.dcmread(os.path.join(self.datapath, patientName, s)) for s in dcmfiles]
+        slices = [pydicom.dcmread(os.path.join(datapath, patientName[0], s)) for s in dcmfiles]
         slices.sort(key = cmpfun)
-        # for onefile in dcmfiles:
-        #     ds = pydicom.dcmread(os.path.join(self.datapath, patientName, onefile))
-        #     # pixel = ds.pixel_array
-        #     temp = get_pixels_hu(ds)
-        #     temp = truncate_hu(temp)
-        #     scipy.misc.imsave('./res/' + onefile + 'r.jpeg', temp)
-        # pixels = []
-
         slicethickness = slices[0].data_element('SliceThickness').value
-        # print(slicethickness)
         dcmkeep = []
-        keeprate = 5.0 / slicethickness
+        keeprate = 10 / slicethickness
         keeprate = int(math.floor(keeprate))
-        # print(keeprate)
         if keeprate < 1:
             keeprate = 1
 
-        # print('rate: ', keeprate)
         tempsign = 0
         for onedcm in slices:
-            # print(onedcm)
             if tempsign % keeprate == 0:
-                # print(tempsign)
-                # print(onedcm)
                 dcmkeep.append(onedcm)
             tempsign += 1
-        # print(len(dcmkeep))
-        if len(dcmkeep) > 30:
-            x = len(dcmkeep)
-            dcmkeep = dcmkeep[(x // 2 - 15) : (x // 2 + 15)]
-        if len(dcmkeep) < 30:
+        if len(dcmkeep) > 32:
+            
+            dcmkeep = dcmkeep[:32]
+        if len(dcmkeep) < 32:
             temp = []
-            for i in range(0, 30 - len(dcmkeep)):
+            for i in range(0, 32 - len(dcmkeep)):
                 temp.append(dcmkeep[0])
             dcmkeep = temp + dcmkeep
-        # sign = 0
-        # print('len of dcmkeep',len(dcmkeep))
+
+        
         indexlist = [0,1,2,3]
 
         if transsign == True:
             index = choice(indexlist)
         else:
             index = 0
-        # print(index)
         pixels = []
+        mid = dcmkeep[len(dcmkeep) // 2]
+        angle = rotate.rotate_angle(mid.pixel_array)
+        if angle > 30 or angle < -30:
+            angle = 0
         sign = 1
         for temp in dcmkeep:
             temp = get_pixels_hu(temp)
-            temp = truncate_hu(temp)
-            # scipy.misc.imsave('./res/' + str(sign) + '.jpeg', temp)
-            # np.save('./res/' + str(sign) + '.npy', temp)
-            # temp = cv2.resize(temp, (256, 256))
+            temp=getThreeChannel(temp)
+            temp = cv2.medianBlur(temp, 3)
+  
+            #temp=gray2rgb(temp)
+            
+            
+            #temp = rotate.rotate(temp, angle)
+            #temp=gray2rgb(temp)
             sign += 1
             pixels.append(temp)
+            
 
         pixels = np.array(pixels, dtype=np.float)
+ 
         if index == 1:
             pixels = angle_transpose(pixels, 90)
         if index == 2:
             pixels = angle_transpose(pixels, 180)        
         if index == 3:
-            pixels = angle_transpose(pixels, 270)       
-
-        pixels = np.expand_dims(pixels, -1)
+            pixels = angle_transpose(pixels, 270)
+        if len(pixels.shape)<4:
+            pixels = np.expand_dims(pixels, -1)        
+   
+    
 
         return pixels
-        # patient_pixels = get_pixels_hu(slices)#.transpose(2,1,0)
-        # print(patient_pixels.shape)
-
-    def getOnePatient2(self, testdatapath, patientName):
-        dcmfiles = os.listdir(testdatapath + patientName)
-        # print(dcmfiles)
-        dcmfiles.sort()
-        # print(dcmfiles)
-        slices = [pydicom.dcmread(os.path.join(testdatapath, patientName, s)) for s in dcmfiles]
-        slices.sort(key = cmpfun)
-        # for onefile in dcmfiles:
-        #     ds = pydicom.dcmread(os.path.join(self.datapath, patientName, onefile))
-        #     # pixel = ds.pixel_array
-        #     temp = get_pixels_hu(ds)
-        #     temp = truncate_hu(temp)
-        #     scipy.misc.imsave('./res/' + onefile + 'r.jpeg', temp)
-        # pixels = []
-
-        slicethickness = slices[0].data_element('SliceThickness').value
-        # print(slicethickness)
-        dcmkeep = []
-        keeprate = 5.0 / slicethickness
-        keeprate = int(math.floor(keeprate))
-        # print(keeprate)
-        if keeprate < 1:
-            keeprate = 1
-
-        # print('rate: ', keeprate)
-        tempsign = 0
-        for onedcm in slices:
-            # print(onedcm)
-            if tempsign % keeprate == 0:
-                # print(tempsign)
-                # print(onedcm)
-                dcmkeep.append(onedcm)
-            tempsign += 1
-        # print(len(dcmkeep))
-        if len(dcmkeep) > 30:
-            x = len(dcmkeep)
-            dcmkeep = dcmkeep[(x // 2 - 15) : (x // 2 + 15)]
-        if len(dcmkeep) < 30:
-            temp = []
-            for i in range(0, 30 - len(dcmkeep)):
-                temp.append(dcmkeep[0])
-            dcmkeep = temp + dcmkeep
-        # sign = 0
-        # print('len of dcmkeep',len(dcmkeep))
-        pixels = []
-
-        # # print(type(pixels[0]))
-        for temp in dcmkeep:
-            # sign += 1
-            temp = get_pixels_hu(temp)
-            temp = truncate_hu(temp)
-            # scipy.misc.imsave('./res/' + str(sign) + 'r.jpeg', temp)
-            pixels.append(temp)
-
-        pixels = np.array(pixels, dtype=np.float)
-        pixels = np.expand_dims(pixels, -1)
-        
-        return pixels
-        
-        # patient_pixels = get_pixels_hu(slices)#.transpose(2,1,0)
-        # print(patient_pixels.shape)
 
     def getThickness(self):
         return self.slicethicknesscount
 
-    # def getAllPatients(self):
-    #     return os.listdir(self.datapath)
-    
-    # def getAllLabels(self):
-    #     lines = csvTools.readCSV(self.labelpath + 'train_label.csv')
-    #     lines = lines[1:]
-    #     return lines

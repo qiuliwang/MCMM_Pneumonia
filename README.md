@@ -1,2 +1,1 @@
-# Recurrent-CNN
-recurrent CNN
+Recurrent CNN for Pneumonia Diagnosis
