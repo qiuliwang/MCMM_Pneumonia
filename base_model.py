@@ -1,3 +1,13 @@
+'''
+Modified by Wang Qiuli
+
+2019/5/9
+
+We use some code from project: https://github.com/DeepRNN/image_captioning
+
+base model for recurrent cnn
+'''
+
 import os
 import numpy as np
 import pandas as pd
@@ -12,12 +22,12 @@ from utils.nn import NN
 
 from utils.misc import ImageLoader, CaptionData, TopN
 from sklearn.metrics import roc_auc_score,recall_score
+
 class BaseModel(object):
     def __init__(self, config):
         self.config = config
         self.is_train = True if config.phase == 'train' else False
         self.train_cnn = self.is_train and config.train_cnn
-        self.image_loader = ImageLoader('./utils/ilsvrc_2012_mean.npy')
         self.image_shape = [512, 512, 3]
         self.nn = NN(config)
         self.global_step = tf.Variable(0,
@@ -48,8 +58,7 @@ class BaseModel(object):
                     onelabel = [[0, 1]]
                 else:
                     onelabel = [[1, 0]]
-                # print(onelabel)
-                # print('onelabel: ', onelabel)
+
                 feed_dict = {self.images: slices, self.real_label: onelabel}            
 
                 _, summary, global_step = sess.run([self.opt_op,
@@ -65,7 +74,6 @@ class BaseModel(object):
                     onelabel = [[0, 1]]
                 else:
                     onelabel = [[1, 0]]  
-                # print(testlabel)                    
                 testslices = dataobj.getOnePatient(testpatient, False)
 
                 feed_dict = {self.images: testslices, self.real_label: onelabel}
@@ -84,29 +92,6 @@ class BaseModel(object):
         record.close()
         train_writer.close()
         print("Training complete.")
-
-    def getLabel2(self, onepatient, alllabel):
-        for onelabel in alllabel:
-            if onepatient == onelabel[0]:
-                if int(onelabel[1]) == 1:
-                    return([0, 1])
-                elif int(onelabel[1]) == 0:
-                    return([1, 0])
-
-                break
-            
-    def getLabel(self, onepatient, alllabel):
-        label = []
-        for onelabel in alllabel:
-            if onepatient == onelabel[0]:
-                if int(onelabel[1]) == 1:
-                    label.append([0, 1])
-                elif int(onelabel[1]) == 0:
-                    label.append([1, 0])
-
-                break
-            
-        return label
 
     def test(self, sess, testdata, dataobj):
         """ Test the model using any given images. """
@@ -196,8 +181,6 @@ class BaseModel(object):
                 count += 1
         print("%d tensors loaded." %count)
     
-    # def load_tf(self, sess, )
-
     def load_cnn(self, session, data_path, ignore_missing=True):
         """ Load a pretrained CNN model. """
         print("Loading the CNN from %s..." %data_path)

@@ -1,3 +1,13 @@
+'''
+Modified by Wang Qiuli
+
+2019/5/9
+
+We use some code from project: https://github.com/DeepRNN/image_captioning
+
+main.py is entry of rcnn
+'''
+
 from dataprepare import Data
 from config import Config
 import tensorflow as tf
@@ -18,21 +28,22 @@ traintxt=csvTools.readCSV('train.csv')
 testtxt=csvTools.readCSV('test.csv')
 validtxt= csvTools.readCSV('valid.csv')
 traindata=[]
-# print(traintxt)
+
+# remove void item
 for one in traintxt:
     if len(one) != 0:
         
         traindata.append(one)
-# print(traindata)
 
 testdata=[]
-# print(len(traindata))
+
 for one in testtxt:
     if len(one) != 0:
         
         testdata.append(one)
 
 validdata = []
+
 for one in validtxt:
     if len(one) != 0:
         validdata.append(one)
@@ -43,34 +54,31 @@ load_cnn = True
 
 
 with tf.Session(config=tf.ConfigProto(gpu_options=gpu_options)) as sess:
-# with tf.Session() as sess:
-
     model = RCNNMODEL(config)
-
     sess.run(tf.global_variables_initializer())   
-    if load:
-        model.load(sess, './models/35820.npy')
-    if load_cnn:
-        model.load_cnn(sess, './resnet50_no_fc.npy')
+    # if load:
+    #     model.load(sess, './models/35820.npy')
+    # if load_cnn:
+    #     model.load_cnn(sess, './resnet50_no_fc.npy')
 
-        # tf.global_variables_initializer().run()                                              
-        # exclusions = ['Mixed_7c','Mixed_7b','AuxLogits','AuxLogits','Logits','Predictions','global_step']
-        # variables_to_restore = slim.get_variables_to_restore(exclude=exclusions)
-        # init_fn = slim.assign_from_checkpoint_fn(checkpoint_file, variables_to_restore, ignore_missing_vars=True)
-        # init_fn(sess)        
-
-    tf.get_default_graph().finalize()
+    #     # if you want to use GoogleNet, use code below
+    #     '''
+    #     tf.global_variables_initializer().run()                                              
+    #     exclusions = ['Mixed_7c','Mixed_7b','AuxLogits','AuxLogits','Logits','Predictions','global_step']
+    #     variables_to_restore = slim.get_variables_to_restore(exclude=exclusions)
+    #     init_fn = slim.assign_from_checkpoint_fn(checkpoint_file, variables_to_restore, ignore_missing_vars=True)
+    #     init_fn(sess)        
+    #     '''
+    # tf.get_default_graph().finalize()
     
+    # model.train(sess, traindata, validdata, data, False)
+    # model.test(sess, testdata, data)
 
+    # model.train(sess, traindata, validdata, data, False)
+    # model.test(sess, testdata, data)
 
-    model.train(sess, traindata, validdata, data, False)
-    model.test(sess, testdata, data)
+    # model.train(sess, traindata, validdata, data, False)
+    # model.test(sess, testdata, data)
 
-    model.train(sess, traindata, validdata, data, False)
-    model.test(sess, testdata, data)
-
-    model.train(sess, traindata, validdata, data, False)
-    model.test(sess, testdata, data)
-
-    model.train(sess, traindata, validdata, data, False)
-    model.test(sess, testdata, data)
+    # model.train(sess, traindata, validdata, data, False)
+    # model.test(sess, testdata, data)

@@ -1,3 +1,13 @@
+'''
+Modified by Wang Qiuli
+
+2019/5/9
+
+We use some code from project: https://github.com/DeepRNN/image_captioning
+
+Model for recurrent cnn
+'''
+
 import tensorflow as tf
 import numpy as np
 from tensorflow.contrib.slim.python.slim.nets import inception_v3
@@ -5,6 +15,7 @@ from base_model import BaseModel
 import sys 
 import tensorflow.contrib.slim as slim
 from tensorflow.contrib.layers.python.layers import layers as layers_lib
+
 class RCNNMODEL(BaseModel):
     def build(self):
         """ Build the model. """
@@ -192,9 +203,7 @@ class RCNNMODEL(BaseModel):
     def cal_cnn_loss(self):
         conv_feats = self.conv_feats
         print('shape of conv_feats: ', conv_feats.get_shape().as_list())
-
         logits = self.getLogitsForCNN(conv_feats)
-        # print('shape of logits: ', logits.get_shape().as_list())
 
     
     def build_mycnn(self):
@@ -312,8 +321,7 @@ class RCNNMODEL(BaseModel):
         print('shape of fc1: ', fc1.get_shape().as_list())
 
         self.conv_feats = fc1
-        # self.num_ctx = 49
-        # self.dim_ctx = 2048
+
         self.images = images
 
     def resnet_block(self, inputs, name1, name2, c, s=2):
@@ -422,14 +430,10 @@ class RCNNMODEL(BaseModel):
             layers.append(lstmlayer)
 
         lstm = tf.nn.rnn_cell.MultiRNNCell(layers, state_is_tuple = True) 
-        # Initialize the LSTM using the mean context
 
         # Initialize the LSTM using the mean context
         with tf.variable_scope("initialize"):
             initial_state = lstm.zero_state(1, tf.float32)
-        #     print('shape of initial_memory: ', initial_memory.get_shape().as_list())
-        #     print('shape of initial_output: ', initial_output.get_shape().as_list())
-        #     initial_state = initial_memory, initial_output
 
         # Prepare to run
         predictions = []
@@ -441,7 +445,6 @@ class RCNNMODEL(BaseModel):
             if num_steps < 1:
                 num_steps = 1
             last_state = initial_state
-            # last_word = tf.zeros([config.batch_size], tf.int32)
         else:
             num_steps = 1
         last_state = initial_state
@@ -454,11 +457,8 @@ class RCNNMODEL(BaseModel):
             with tf.variable_scope("lstm"):
                 current_input = contexts[idx]
                 current_input = tf.expand_dims(current_input, 0)
-                # print 'shape of current_input', current_input.get_shape().as_list()
                 output, state = lstm(current_input, last_state)
                 last_state = state
-                # print 'shape of output', output.get_shape().as_list()
-
                 outputs.append(output)
 
         print('shape of output: ', outputs[-1].get_shape().as_list())
@@ -506,18 +506,13 @@ class RCNNMODEL(BaseModel):
 
             print('shape of cross_entropy_loss: ',cross_entropy_loss.get_shape().as_list())
             print('shape of cnn_loss: ',cnn_loss.get_shape().as_list())
-            W1 = tf.Variable(0.5, name='weight1')
-          
-            W1=tf.nn.sigmoid(W1)
-         
 
-            
-            #lamda = tf.Variable(0.5, name='lamda')
-            #loss = tf.multiply(cross_entropy_loss, W1)
-            loss = tf.multiply(cross_entropy_loss, W1) + tf.multiply(cnn_loss, (1-W1)) #+ tf.multiply(lamda, (tf.pow(W1, 2)))
+            W1 = tf.Variable(0.5, name='weight1')
+            W1=tf.nn.sigmoid(W1)
+            loss = tf.multiply(cross_entropy_loss, W1) + tf.multiply(cnn_loss, (1-W1))
             print('shape of loss: ',loss.get_shape().as_list())
 
-            self.loss = loss #$cross_entropy_loss# + cnn_loss
+            self.loss = loss 
             self.prediction = prediction
         else:
             self.initial_state = initial_state
