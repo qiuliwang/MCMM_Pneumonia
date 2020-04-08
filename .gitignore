@@ -1,7 +1,7 @@
 *.pyc
-.ignore
 *.csv
 *.txt
 *.npy
 summary/
 models/
+.DS_Store

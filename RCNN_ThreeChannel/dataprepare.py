@@ -1,11 +1,8 @@
 '''
-Modified by Wang Qiuli, Li Zhihuan
+Created by Wang Qiuli, Li Zhihuan
+2019/4/8
 
-2019/5/9
-
-We use some code from project: https://github.com/DeepRNN/image_captioning
-
-tools for data process
+wangqiuli@cqu.edu.cn
 '''
 
 import os
@@ -20,6 +17,7 @@ cmpfun = operator.attrgetter('InstanceNumber')
 from PIL import Image
 from random import choice
 import cv2
+import rotate
 
 def truncate_hu(image_array, max, min):
     image = image_array.copy()
@@ -27,7 +25,6 @@ def truncate_hu(image_array, max, min):
     image[image < min] = min
     image = normalazation(image)
     return image
-
 def getThreeChannel(pixhu):
     lungwindow = truncate_hu(pixhu, 400, -1000)
     highattenuation = truncate_hu(pixhu, 240, -160)
@@ -39,10 +36,10 @@ def getThreeChannel(pixhu):
 def normalazation(image_array):
     max = image_array.max()
     min = image_array.min()
-    image_array = (image_array-min)/(max-min)  
+    image_array = (image_array-min)/(max-min)  # float cannot apply the compute,or array error will occur
     avg = image_array.mean()
     image_array = image_array-avg
-    return image_array  
+    return image_array   # a bug here, a array must be returned,directly appling function did't work
 
 def get_pixels_hu(ds):
     image = ds.pixel_array
@@ -82,24 +79,17 @@ class Data(object):
 	    self.count = 0
 
     def getOnePatient(self, patientName, transsign = False):
-        # data path
-        if 'fung' in patientName[1]:
-            datapath = '/raid/data/pneumonia/FungusScreened/'
-        elif 'bact' in patientName[1]:
-            datapath = '/raid/data/pneumonia/BacteriaScreened/'
+        if 'nor' in patientName[1]:
+            datapath = 'path/for/normalpatient/'
         else:
-        
-            datapath = '/raid/data/pneumonia/NormalScreened/'
-        
-        # get dicom files, read and sort
+            datapath = 'path/for/pneumonia/'
+
         dcmfiles = os.listdir(datapath + patientName[0])
         dcmfiles.sort()
         slices = [pydicom.dcmread(os.path.join(datapath, patientName[0], s)) for s in dcmfiles]
         slices.sort(key = cmpfun)
         slicethickness = slices[0].data_element('SliceThickness').value
         dcmkeep = []
-
-        # keep one image every 10 mm
         keeprate = 10 / slicethickness
         keeprate = int(math.floor(keeprate))
         if keeprate < 1:
@@ -119,13 +109,7 @@ class Data(object):
                 temp.append(dcmkeep[0])
             dcmkeep = temp + dcmkeep
 
-        # if transsign = True, indexlist control the angle of transpose
         indexlist = [0,1,2,3]
-
-        if transsign == True:
-            index = choice(indexlist)
-        else:
-            index = 0
         pixels = []
         mid = dcmkeep[len(dcmkeep) // 2]
         angle = rotate.rotate_angle(mid.pixel_array)
@@ -141,13 +125,6 @@ class Data(object):
             
 
         pixels = np.array(pixels, dtype=np.float)
- 
-        if index == 1:
-            pixels = angle_transpose(pixels, 90)
-        if index == 2:
-            pixels = angle_transpose(pixels, 180)        
-        if index == 3:
-            pixels = angle_transpose(pixels, 270)
         if len(pixels.shape)<4:
             pixels = np.expand_dims(pixels, -1)        
 

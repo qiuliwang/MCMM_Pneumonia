@@ -1,10 +1,17 @@
+'''
+Created by Wang Qiuli, Li Zhihuan
+2019/4/8
+
+wangqiuli@cqu.edu.cn
+'''
+
 
 class Config(object):
     """ Wrapper class for various (hyper)parameters. """
     def __init__(self):
         # about the model architecture
-        self.cnn = 'resnet50'               # 'vgg16' or 'resnet50'
-        self.num_lstm_units = 256
+        self.cnn = 'resnet50'               # 'vgg16' or 'resnet50 or inception_v3'
+        self.num_lstm_units = 128
         self.num_initalize_layers = 1    # 1 or 2
         self.dim_initalize_layer = 512
         self.num_attend_layers = 2       # 1 or 2

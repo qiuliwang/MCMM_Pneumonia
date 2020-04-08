@@ -1,12 +1,10 @@
 '''
-Modified by Wang Qiuli, Li Zhihuan
+Created by Wang Qiuli, Li Zhihuan
+2019/4/8
 
-2019/5/9
-
-We use some code from project: https://github.com/DeepRNN/image_captioning
-
-base model for recurrent cnn
+wangqiuli@cqu.edu.cn
 '''
+
 
 import os
 import numpy as np
@@ -19,21 +17,24 @@ from tqdm import tqdm
 import scipy.misc
 
 from utils.nn import NN
-
+import cv2
 from utils.misc import ImageLoader, CaptionData, TopN
 from sklearn.metrics import roc_auc_score,recall_score
-
 class BaseModel(object):
     def __init__(self, config):
         self.config = config
         self.is_train = True if config.phase == 'train' else False
         self.train_cnn = self.is_train and config.train_cnn
+        self.image_loader = ImageLoader('./utils/ilsvrc_2012_mean.npy')
         self.image_shape = [512, 512, 3]
         self.nn = NN(config)
         self.global_step = tf.Variable(0,
                                        name = 'global_step',
                                        trainable = False)
         self.build()
+        self.record = open('lossrecord_oneloss.txt', 'w')
+        self.predrecord = open('predrecord__oneloss'+ self.config.cnn + '_'+ str(self.config.num_lstm_units) + '_'+'_.csv', 'w')
+
 
     def build(self):
         raise NotImplementedError()
@@ -48,7 +49,6 @@ class BaseModel(object):
         train_writer = tf.summary.FileWriter(config.summary_dir,
                                              sess.graph)
 
-        record = open('lossrecord.txt', 'w')
         for _ in tqdm(list(range(config.num_epochs)), desc='epoch'):
 
             for onepatient in tqdm(train_data, desc = 'data'):
@@ -82,22 +82,78 @@ class BaseModel(object):
                 if correctpred == True:
                     correctpercent += 1
                 else:
-                    print(testpatient)
+                    success = 1
             print('loss: ', temploss / len(test_data))
             print('acc: ', correctpercent / len(test_data))
-            record.write('loss: ' + str(temploss / len(test_data)) + '\n')
+            self.record.write('loss: ' + str(temploss / len(test_data)) + ', aac: ' + str(correctpercent / len(test_data)) + '\n')
+
             train_writer.add_summary(summary, global_step)
 
         self.save()
-        record.close()
         train_writer.close()
         print("Training complete.")
 
-    def test(self, sess, testdata, dataobj):
+    def test_get_mid_images(self, sess, testdata, dataobj, sign):
         """ Test the model using any given images. """
-        print("Testing the model ...")
+        """ Gives out the middle outputs. """
+
+        print("Testing the model ..." + sign)
         config = self.config
-        predrecord = open('predrecord_'+ self.config.cnn + '_'+ str(self.config.num_lstm_units) + '_'+'_.csv', 'w')
+        label = []
+        for onetestpatient in tqdm(testdata):
+            if 'nor' in onetestpatient[1]:
+                onelabel = [[0, 1]]
+            else:
+                onelabel = [[1, 0]]
+            label.append(np.argmin(onelabel))
+            slices = dataobj.getOnePatient(onetestpatient)            
+            feed_dict = {self.images: slices, self.real_label: onelabel}
+            middleconvs4 = sess.run([self.middleconvs], feed_dict=feed_dict)
+            patientid = onetestpatient[0]
+            if 'nor' not in onetestpatient[1]:
+                middle = middleconvs4[0]
+                for i in range(32):
+                    temp_i = middle[i]
+                    temp_image = temp_i[:,:,0]
+                    if not os.path.exists('./midfeature/'+patientid):
+                        os.mkdir('./midfeature/'+patientid)
+                    for j in range(1,256):
+                        oneconv = temp_i[:,:,j]
+                        temp_image += oneconv
+                    temp_image = cv2.resize(temp_image,(512,512))
+                    scipy.misc.imsave('./midfeature/' + patientid +'/'+ str(i) + '.jpg', temp_image)
+
+
+        print("Test completed.")
+
+    def getLabel2(self, onepatient, alllabel):
+        for onelabel in alllabel:
+            if onepatient == onelabel[0]:
+                if int(onelabel[1]) == 1:
+                    return([0, 1])
+                elif int(onelabel[1]) == 0:
+                    return([1, 0])
+
+                break
+            
+    def getLabel(self, onepatient, alllabel):
+        label = []
+        for onelabel in alllabel:
+            if onepatient == onelabel[0]:
+                if int(onelabel[1]) == 1:
+                    label.append([0, 1])
+                elif int(onelabel[1]) == 0:
+                    label.append([1, 0])
+
+                break
+            
+        return label
+
+    def test(self, sess, testdata, dataobj, sign):
+        """ Test the model using any given images. """
+        print("Testing the model ..." + sign)
+        config = self.config
+        predrecord = self.predrecord
         predrecord.write('id,ret\n')
         correctpercent = 0
         TP=0
@@ -117,7 +173,6 @@ class BaseModel(object):
             feed_dict = {self.images: slices, self.real_label: onelabel}
             prediction, correct_pred = sess.run([self.prediction, self.correct_pred], feed_dict=feed_dict)
             pre.append(1-prediction)
-            print(correct_pred)
             if correct_pred == True: 
                 correctpercent += 1
                 if 'nor' in onetestpatient[1]:
@@ -136,10 +191,8 @@ class BaseModel(object):
         print('Sensitivity',float(TP)/float(TP+FN))
         print('Specificity',float(TN)/float(FP+TN))
         print('recall_score',recall_score(label,pre))
-        print('AUC',roc_auc_score(label,pre))
         
         print('accuracy: ', float(correctpercent) / len(testdata)) 
-        predrecord.close()
 
         print("Test completed.")
 
@@ -181,6 +234,8 @@ class BaseModel(object):
                 count += 1
         print("%d tensors loaded." %count)
     
+    # def load_tf(self, sess, )
+
     def load_cnn(self, session, data_path, ignore_missing=True):
         """ Load a pretrained CNN model. """
         print("Loading the CNN from %s..." %data_path)
