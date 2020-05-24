@@ -1,4 +1,6 @@
 # Deep Regression via Multi-Channel Multi-Modal Learning for Pneumonia Screening
+Source code for the paper [Deep Regression via Multi-Channel Multi-Modal Learning for Pneumonia Screening](https://ieeexplore.ieee.org/document/9078812)
+
 We use and modify some code from project: https://github.com/DeepRNN/image_captioning.  
 
 Before using this code, please download pre-trained weights (ResNet-50, VGG16, GoogleNet-V3) from the link below:
